@@ -5,6 +5,10 @@
 #include "../imgui/imgui_impl_dx11.h"
 #include "../imgui/imgui_impl_win32.h"
 
+#include "../bot/bot.hpp"
+#include <thread>
+#include <vector>
+
 namespace window {
     ID3D11Device* d3d_device = NULL;
     ID3D11DeviceContext* d3d_context = NULL;
@@ -15,6 +19,8 @@ namespace window {
 bool clicked;
 float x_click;
 float y_click;
+
+std::vector<std::thread> threads;
 
 /* window::update_window_pos()
 *  drags the window
@@ -45,7 +51,7 @@ void window::update_window_pos(HWND wnd, UINT msg, WPARAM w_param, LPARAM l_para
         const int x_window = window.left + x_mouse - x_click;
         const int y_window = window.top + y_mouse - y_click;
 
-        SetWindowPos(wnd, nullptr, x_window, y_window, 350,120, SWP_NOREDRAW);
+        SetWindowPos(wnd, nullptr, x_window, y_window, 350,200, SWP_NOREDRAW);
     }
 
     if (GetCapture() != wnd)
@@ -62,7 +68,7 @@ bool window::init() {
     // create application window
     WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, wnd_proc, 0L, 0L, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, _T("kahoot flooder"), NULL };
     ::RegisterClassEx(&wc);
-    HWND hwnd = ::CreateWindow(wc.lpszClassName, _T("kahoot flooder"), (WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN), 1100, 300, 350, 120, NULL, NULL, wc.hInstance, NULL);
+    HWND hwnd = CreateWindowW(wc.lpszClassName, _T("kahoot flooder"), (WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN), 1100, 300, 350, 200, NULL, NULL, wc.hInstance, NULL);
 
     // initialize directx 11
     DXGI_SWAP_CHAIN_DESC swap_chain_description{};
@@ -125,7 +131,7 @@ void window::run() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(350, 450));
+    ImGui::SetNextWindowSize(ImVec2(350, 200));
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
     {
@@ -134,12 +140,37 @@ void window::run() {
         ImGui::Text("Github: @Nolan-Burkhart");
 
         static char pin[8];
-        ImGui::InputText("game pin", pin, 8);         
+        ImGui::InputText("game pin", pin, 8);       
 
-        static int bots;
-        ImGui::SliderInt("number of bots", &bots, 1, 250);           
+        static char name[30];
+        ImGui::InputText("custom name", name, 30);
 
-        ImGui::Button("start!");
+
+        static int bots = 1;
+        ImGui::SliderInt("number of bots", &bots, 1, 1000);           
+        const auto time_since_epoch = []() -> uint64_t {
+            return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        };
+        if (threads.size() == 0 && ImGui::Button("start!")) {
+            for (int i = 0; i < bots; i++) {
+                
+                bot::go_time = time_since_epoch() + (bots / 10) + 3;
+                threads.push_back(std::thread(bot::run, std::string(pin), std::string(name) + std::to_string(i),i*100));
+            }
+        } 
+
+        if (threads.size() != 0)
+        {
+            ImGui::Text(std::string(std::string("bots connected: ") + std::to_string(bot::bots_connected)).c_str());
+            float fraction = (float)bot::bots_connected / (float)bots;
+            ImGui::ProgressBar(fraction);
+            if (time_since_epoch() < bot::go_time) {
+                ImGui::Text(std::string(std::string("seconds until bots hit: ") + std::to_string(bot::go_time - time_since_epoch())).c_str());
+            }
+            else {
+                ImGui::Text("bots have landed");
+            }
+        }
      
         ImGui::End();
     }

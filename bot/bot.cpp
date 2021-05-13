@@ -83,38 +83,49 @@ std::vector<BYTE> base64_decode(std::string const& encoded_string) {
     return ret;
 }
 
-web::websockets::client::websocket_client client;
-void send_message(std::string body)
+bool send_message(std::string body, web::websockets::client::websocket_client client)
 {
-    web::websockets::client::websocket_outgoing_message msg;
-    msg.set_utf8_message(body);
-    client.send(msg);
+    try {
+        web::websockets::client::websocket_outgoing_message msg;
+        msg.set_utf8_message(body);
+        client.send(msg);
+        return true;
+    }
+    catch (...) {
+        return false;
+    }
 }
-std::string response()
+std::string response(web::websockets::client::websocket_client client)
 {
-    auto clienta = client.receive();
-    clienta.wait();
+    try {
+        auto clienta = client.receive();
+        clienta.wait();
 
-    auto t = clienta.get().extract_string();
-    auto text = t.get();
+        auto t = clienta.get().extract_string();
+        auto text = t.get();
 
-    std::cout << text << "\r\n\r\n";
+        std::cout << text << "\r\n\r\n";
 
-    return text;
+        return text;
+    }
+    catch (...) {
+        return "error";
+    }
+}
+namespace bot {
+    int bots_connected;
+    uint64_t go_time;
 }
 
-
-void bot::run() {
-    std::string game_code = "4458283";
+std::wstring get_socket_url(std::string game_code) {
+    const auto time_since_epoch = []() -> uint64_t {
+        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    };
 
     std::string result;
     std::string headers;
 
-    const auto time_since_epoch = []() -> uint64_t {
-        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    };
-    
-    std::wstring url = L"https://kahoot.it/reserve/session/"+std::wstring(game_code.begin(),game_code.end())+L"/?" + std::to_wstring(time_since_epoch()); //fuck unicode strings, all my homies hate unicode strings
+    std::wstring url = L"https://kahoot.it/reserve/session/" + std::wstring(game_code.begin(), game_code.end()) + L"/?" + std::to_wstring(time_since_epoch()); //fuck unicode strings, all my homies hate unicode strings
 
     web::http::client::http_client http_client(url);
 
@@ -130,6 +141,9 @@ void bot::run() {
 
     auto header_request = page_request.get().headers();
     auto token_result = header_request.find(L"x-kahoot-session-token");
+
+    if (token_result == header_request.end())
+        return L"";
 
     auto value = *token_result;
 
@@ -204,7 +218,7 @@ void bot::run() {
         char decoded_char = (char)((((call_string[i] * i) + code_offset) % 77) + 48);
         decoded_challenge_string.push_back(decoded_char);
     }
-    
+
     std::string socket_token{};
     for (int i = 0; i < session_header_b64.size(); i++) //a little more kahoot voodoo;
     {
@@ -214,57 +228,77 @@ void bot::run() {
     //the holy grail!
 
     //connect
-    
-    client = web::websockets::client::websocket_client();
 
-    std::wstring socket_url = L"wss://kahoot.it/cometd/" + std::wstring(game_code.begin(),game_code.end()) + L"/" + std::wstring(socket_token.begin(),socket_token.end()); //i hate the unicode string! i hate the unicode string! i hate the unicode string!
+    std::wstring socket_url = L"wss://kahoot.it/cometd/" + std::wstring(game_code.begin(), game_code.end()) + L"/" + std::wstring(socket_token.begin(), socket_token.end()); //i hate the unicode string! i hate the unicode string! i hate the unicode string!
 
+    return socket_url;
+}
+
+void bot::run(std::string game_code, std::string name, int waitfor) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(waitfor));
     try {
-        auto con = client.connect(socket_url).then([]() { std::cout << "connected!"; });
-        con.wait();
+        const auto time_since_epoch = []() -> uint64_t {
+            return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        };
+
+        bool valid_token = false;
+
+        web::websockets::client::websocket_client client = web::websockets::client::websocket_client();
+        while (!valid_token) {
+            client = web::websockets::client::websocket_client();
+            std::wstring socket_url = get_socket_url(game_code);
+            try {
+                auto con = client.connect(socket_url).then([]() { std::cout << "connected!"; });
+                valid_token = true;
+                con.wait();
+            }
+            catch (...) {
+                //bad decode
+                continue;
+            }
+        }
+
+        //it’s all a matter of rhythm till we finally get our turn
+        //i have 0 clue why the breaks are needed, on Google they are not. but it will refuse to function without them. they couldn't handle the neutron style I guess lol
+        std::string ptr = "[{\"id\":\"1\",\"version\":\"1.0\",\"minimumVersion\":\"1.0\",\"channel\":\"/meta/handshake\",\"supportedConnectionTypes\":[\"websocket\",\"long-polling\",\"callback-polling\"],\"advice\":{\"timeout\":60000,\"interval\":0},\"ext\":{\"ack\":true,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":0,\"o\":0}}}]";
+
+        send_message(ptr, client);
+
+        std::string client_id = find(response(client), "\"clientId\":\"", "\"");
+
+        ptr = "[{\"id\":\"2\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"advice\":{\"timeout\":0},\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":0,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
+
+        send_message(ptr, client);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        response(client);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::string ptr2 = "[{\"id\":\"3\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":0,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
+        bots_connected++;
+        while (go_time > time_since_epoch()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+
+        ptr = "[{\"id\":\"4\",\"channel\":\"/service/controller\",\"data\":{\"type\":\"login\",\"gameid\":\"" + game_code + "\",\"host\":\"kahoot.it\",\"name\":\"" + name + "\",\"content\":\"{\\\"device\\\":{\\\"userAgent\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36\\\",\\\"screen\\\":{\\\"width\\\":2560,\\\"height\\\":1440}}}\"},\"clientId\":\"" + client_id + "\",\"ext\":{ }}]";
+        send_message(ptr2, client);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        send_message(ptr, client);
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+
+        response(client);
+        response(client);
+        response(client);
+
+        ptr = "[{\"id\":\"5\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":2,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
+        send_message(ptr, client);
+
+        response(client);
+        response(client);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        client.close();
     }
     catch (...) {
-        //bad decode
         return;
     }
-
-    std::string gamecode = "4458283";
-    srand(time(NULL));
-    std::string name = std::to_string(rand() % 400000);
-
-
-    //it’s all a matter of rhythm till we finally get our turn
-    //i have 0 clue why the breaks are needed, on Google they are not. but it will refuse to function without them. they couldn't handle the neutron style I guess lol
-    std::string ptr = "[{\"id\":\"1\",\"version\":\"1.0\",\"minimumVersion\":\"1.0\",\"channel\":\"/meta/handshake\",\"supportedConnectionTypes\":[\"websocket\",\"long-polling\",\"callback-polling\"],\"advice\":{\"timeout\":60000,\"interval\":0},\"ext\":{\"ack\":true,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":0,\"o\":0}}}]";
-
-    send_message(ptr);
-
-    std::string client_id = find(response(), "\"clientId\":\"", "\"");
-
-    ptr = "[{\"id\":\"2\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"advice\":{\"timeout\":0},\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":0,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
-
-    send_message(ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    response();
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    std::string ptr2 = "[{\"id\":\"3\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":0,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
-
-    ptr = "[{\"id\":\"4\",\"channel\":\"/service/controller\",\"data\":{\"type\":\"login\",\"gameid\":\"" + gamecode + "\",\"host\":\"kahoot.it\",\"name\":\"" + name + "\",\"content\":\"{\\\"device\\\":{\\\"userAgent\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36\\\",\\\"screen\\\":{\\\"width\\\":2560,\\\"height\\\":1440}}}\"},\"clientId\":\"" + client_id + "\",\"ext\":{ }}]";
-    send_message(ptr2);
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-    send_message(ptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
-
-    response();
-    response();
-    response();
-
-    ptr = "[{\"id\":\"5\",\"channel\":\"/meta/connect\",\"connectionType\":\"websocket\",\"clientId\":\"" + client_id + "\",\"ext\":{\"ack\":2,\"timesync\":{\"tc\":" + std::to_string(time_since_epoch()) + ",\"l\":47,\"o\":-189}}}]";
-    send_message(ptr);
-
-    response();
-    response();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    client.close();
 }

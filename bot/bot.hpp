@@ -7,9 +7,12 @@
 /* windows includes */
 #include <tchar.h>
 #include <cstdint>
+#include <string>
 
 namespace bot {
-	void run();
+	void run(std::string game_code, std::string name, int waitfor);
+	extern uint64_t go_time;
+	extern int bots_connected;
 }
 
-#endif // !_WINDOW_HPP_
+#endif // !BOT_HPP_
