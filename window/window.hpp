@@ -23,4 +23,4 @@ namespace window {
 
 }
 
-#endif // !_WINDOW_HPP_
+#endif // !WINDOW_HPP_

@@ -1,5 +1,7 @@
+#include <Windows.h>
+
 #include "window/window.hpp"
-int main() {
+int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow) {
 	//initialize the window
 	window::init();
 	while (true) {

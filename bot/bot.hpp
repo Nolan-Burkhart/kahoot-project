@@ -10,7 +10,9 @@
 #include <string>
 
 namespace bot {
+	std::wstring get_socket_url(std::string game_code);
 	void run(std::string game_code, std::string name, int waitfor);
+
 	extern uint64_t go_time;
 	extern int bots_connected;
 }

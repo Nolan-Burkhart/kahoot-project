@@ -118,7 +118,7 @@
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>Bcrypt.lib;wldap32.lib;AdvAPI32.Lib;User32.Lib;Gdi32.Lib;winhttp.lib;Crypt32.lib;ws2_32.lib;Httpapi.lib;d3d11.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
@@ -133,7 +133,7 @@
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>

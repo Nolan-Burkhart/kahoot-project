@@ -1,3 +1,5 @@
+/* project includes */
+#include "../bot/bot.hpp"
 #include "window.hpp"
 
 /* imgui includes */
@@ -5,15 +7,15 @@
 #include "../imgui/imgui_impl_dx11.h"
 #include "../imgui/imgui_impl_win32.h"
 
-#include "../bot/bot.hpp"
+/* windows includes */
 #include <thread>
 #include <vector>
 
 namespace window {
-    ID3D11Device* d3d_device = NULL;
-    ID3D11DeviceContext* d3d_context = NULL;
-    IDXGISwapChain* d3d_swapchain = NULL;
-    ID3D11RenderTargetView* d3d_view = NULL;
+    ID3D11Device* d3d_device = nullptr;
+    ID3D11DeviceContext* d3d_context = nullptr;
+    IDXGISwapChain* d3d_swapchain = nullptr;
+    ID3D11RenderTargetView* d3d_view = nullptr;
 }
 
 bool clicked;
@@ -23,9 +25,8 @@ float y_click;
 std::vector<std::thread> threads;
 
 /* window::update_window_pos()
-*  drags the window
+*  drags the window across the string
 */
-
 void window::update_window_pos(HWND wnd, UINT msg, WPARAM w_param, LPARAM l_param) {
     POINT p;
     GetCursorPos(&p);
@@ -135,43 +136,43 @@ void window::run() {
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar;
     {
-        ImGui::Begin("kahoot spammer", (bool*)0, window_flags);                          
+        ImGui::Begin("kahoot spammer", (bool*)0, window_flags);
         ImGui::Text("kahoot spammer by nolan burkhart");
         ImGui::Text("Github: @Nolan-Burkhart");
 
         static char pin[8];
-        ImGui::InputText("game pin", pin, 8);       
+        ImGui::InputText("game pin", pin, 8);
 
         static char name[30];
         ImGui::InputText("custom name", name, 30);
 
-
         static int bots = 1;
-        ImGui::SliderInt("number of bots", &bots, 1, 1000);           
-        const auto time_since_epoch = []() -> uint64_t {
+        ImGui::SliderInt("number of bots", &bots, 1, 100); //max 100 sockets we can open
+
+        const auto time_since_epoch = []() -> uint64_t { //macro i keep abusing
             return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         };
-        if (threads.size() == 0 && ImGui::Button("start!")) {
-            for (int i = 0; i < bots; i++) {
-                
-                bot::go_time = time_since_epoch() + (bots / 10) + 3;
-                threads.push_back(std::thread(bot::run, std::string(pin), std::string(name) + std::to_string(i),i*100));
-            }
-        } 
 
-        if (threads.size() != 0)
+        if (threads.size() == 0 && ImGui::Button("start!")) { //if we haven't started it yet
+            for (int i = 0; i < bots; i++) {
+                bot::go_time = time_since_epoch() + (bots / 10) + 3; //set the time for when the bots will flood all at once rather than trickle
+                threads.push_back(std::thread(bot::run, std::string(pin), std::string(name) + std::to_string(i), i * 100)); //creat a new bot thread
+            }
+        }
+
+        if (threads.size() != 0) //if we have started
         {
-            ImGui::Text(std::string(std::string("bots connected: ") + std::to_string(bot::bots_connected)).c_str());
-            float fraction = (float)bot::bots_connected / (float)bots;
-            ImGui::ProgressBar(fraction);
-            if (time_since_epoch() < bot::go_time) {
+            ImGui::Text(std::string(std::string("bots connected: ") + std::to_string(bot::bots_connected)).c_str()); //how many bots are connected
+            float fraction = (float)bot::bots_connected / (float)bots; //percent of bots
+            ImGui::ProgressBar(fraction); //show progress bar
+            if (time_since_epoch() < bot::go_time) { //countdown
                 ImGui::Text(std::string(std::string("seconds until bots hit: ") + std::to_string(bot::go_time - time_since_epoch())).c_str());
             }
             else {
                 ImGui::Text("bots have landed");
             }
         }
-     
+
         ImGui::End();
     }
 
@@ -182,7 +183,7 @@ void window::run() {
     d3d_context->ClearRenderTargetView(d3d_view, clear_color_with_alpha);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-    d3d_swapchain->Present(1, 0);
+    d3d_swapchain->Present(1, 0); //present
 }
 
 /* window::exit()
@@ -194,6 +195,11 @@ void window::exit() {
     ImGui::DestroyContext();
 }
 
+
+
+/* window::wnd_proc()
+*  handles window input
+*/
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT window::wnd_proc(HWND wnd, UINT msg, WPARAM w_param, LPARAM l_param) {
 
