@@ -321,12 +321,8 @@ void bot::run(std::string game_code, std::string name, int waitfor) {
         int id = 6;
         while (true) {
             std::string res = response(client);
-            if (res == "error") {
-                run(game_code, name + "1", 0);
-                return;
-            }
 
-            if (res.find("kickCode") != std::string::npos) {
+            if (res.find("kickCode") != std::string::npos || res == "error") { //dropped by client or kicked
                 run(game_code, name+"1", 0);
                 return;
             }
