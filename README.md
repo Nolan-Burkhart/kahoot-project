@@ -2,6 +2,8 @@
 
 an easy to use kahoot spammer in C++
 
+uses the microsoft cpprestsdk in order to do web requests.
+
 still pretty buggy, i have stuff to fix. but it works. 
 
 if the bots are kicked they will just rejoin.
