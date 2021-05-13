@@ -10,13 +10,6 @@
 #include <cpprest/producerconsumerstream.h>
 #include <chrono>
 
-static size_t my_write(void* buffer, size_t size, size_t nnemb, void* param) {
-    std::string& text = *static_cast<std::string*>(param);
-    size_t total_size = size * nnemb;
-    text.append(static_cast<char*>(buffer), total_size);
-    return total_size;
-}
-
 std::string find(std::string input, std::string start, std::string end) {
     int start_index = input.find(start) + start.length();
 
@@ -38,11 +31,8 @@ std::string find_and_replace(std::string input, std::string replace_target, std:
 
     return ret;
 }
-size_t hdf(char* b, size_t size, size_t nitems, void* userdata) {
-    size_t numbytes = size * nitems;
-    printf("%.*s\n", numbytes, b);
-    return numbytes;
-}
+
+
 static const std::string base64_chars =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 "abcdefghijklmnopqrstuvwxyz"
